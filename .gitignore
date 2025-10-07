@@ -4,6 +4,9 @@
 #project
 *.Rproj
 
+#html
+model_selection_prac_gilas.html
+
 # History files
 .Rhistory
 .Rapp.history
