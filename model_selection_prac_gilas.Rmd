@@ -78,20 +78,31 @@ data_vof <- datatrim_gila %>% filter(site_id=="Valley of Fire")
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
-
-
+# Calico Model
+<br>
+<br>
+My data is binomial (detection = 1 ; non-detection = 0), so I made my model using the binomial logit transformation
 ```{r model anova}
 #binomial model
 model_calico <- glm(det_strict ~ elev + avg_wind_spd + air_temp + rel_hum + gr_temp + rock_ind + abs_shr_dens, data=data_calico, family=binomial(link="logit"))
 #compare in anova for all coefficients
 anova(model_calico)
 ```
+<br>
+A surprising number of my variables are showing significance on the logit scale.
+<br>
+
+## Collinearity and Correlation checks
 
 ```{r ggpairs}
 #Graph the variables against each other
 ggpairs(data_calico, columns = 5:11, cardinality_threshold = 15) + theme_bw()
 ```
+<br>
+unsurprisingly a decent amount of correlation in my data. Most obvious being ground temp, air temp, and relative humidity all being related. 
 
+More importantly for later, elevation and shrub density both show some correlative trends with rockiness. 
+<br>
 ```{r olsrr}
 #added variable plots to see if any predictor fits when accounting for the others
 olsrr::ols_plot_added_variable(model_calico)
@@ -101,14 +112,37 @@ olsrr::ols_plot_added_variable(model_calico)
 #Using VIF to check collinearity
 performance::check_collinearity(model_calico)
 ```
+<br>
+I was genuinely surprised when all my Variance Inflaction Factors were all under 3
+<br>
 
+## Checking the model 
+
+<br>
+
+```{r performance, fig.height=8, fig.width=10}
+performance::check_model(model_calico)
+```
+<br>
 ```{r binned residual plot}
 #check model binned residual plot
 x <- predict(model_calico)
 y <- resid(model_calico)
 binnedplot(x, y)
 ```
+<br>
+Doing the binned residual plot to check the binomial model showed a strong curve downward. When looking this up I found two possible solutions, neither of which I was confident in my ability to do without more research. 
+<br>
+<br>
+The first is that I need to add a quadratic version of my variables in addition to the normal ones. In other words the model would have an added variable the likes of (rock_ind + (rock_ind)^2). I wasn't sure which of my variables would need that or how to properly add it to the multiple variable model
+<br>
+<br>
+The second solution that I found suggestion was instead of a GLM to use a Generalized Additive Model (GAM) which from what I read can be used the same as a GLM but allows for more flexible and non-linear functionality at the cost of interpretive power. 
+<br>
 
+## Time for Dredge
+
+<br>
 ```{r Dredging <5}
 #dredging!
 options(na.action = "na.fail") # otherwise blows up with NA values
@@ -119,18 +153,36 @@ subset(dredge_calico, delta <5)
 ```{r Dredging <2}
 subset(dredge_calico, delta <2)
 ```
+<br>
+There a quite a few models with equal power. I looks like rockiness, shrub density, and elevation is included in all of them and relative humidity is included in none. Lets see if our variable weights agree. 
+<br>
 
+##Variable Weights
+
+<br>
 ```{r variable weights}
 #variable weights
 sw(dredge_calico)
 ```
+<br>
+Three varaibles stick out above the rest, though none are irrelevant. 
+<br>
 
+## Model Summary
+
+<br>
 ```{r overall model summary <2}
 #model summary
 summary(model.avg(dredge_calico, subset = delta < 2))
 ```
+<br>
+In both the full average and conditional average tables those same three variables show significance above the rest. Now lets graph all of our variables individually.
+<br>
 
-```{r modeling coefficients}
+## Individual coefficients
+
+<br>
+```{r modeling coefficients, fig.height=8, fig.width=10}
 #modeling coefficients averaged across all models
 
 c1 <- ggplot(data_calico, aes(abs_shr_dens, det_strict)) + 
