@@ -1,0 +1,107 @@
+### Model Selection Practice
+#Collin Stratton
+
+library(tidyverse)
+library(ggplot2)
+library(arm)
+library(ggfortify)
+library(performance)
+library(AICcmodavg)
+library(grid)
+library(hms)
+library(scales)
+library(lme4)
+library(lmerTest)
+library(MuMIn)
+library(asbio)
+library(GGally)
+library(performance)
+library(patchwork)
+library(olsrr)
+
+data_gila <- read.csv("data_gmocc-all-nv.csv")
+
+#average of the shrub distance per point in cm
+data_gila <- data_gila %>% mutate(avg_shr_dist = (shr_nw + shr_ne + shr_se + shr_sw) / 4)
+#density of the shrubs in "shrubs/m^2"
+data_gila <- data_gila %>% mutate(abs_shr_dens = (1/((avg_shr_dist/100))^2))
+
+# making time graphable
+data_gila$time <- paste0(data_gila$time, ":00") #adds 'seconds' to the data to put it in "%H:%M:%S" format
+gila_time_posix <- strptime(data_gila$time, format = "%H:%M:%S") #Makes the "time" column character data a "POSIXlt" object
+gila_time_hms <- as_hms(gila_time_posix) #Makes the Posix object an hms (hours, minutes, seconds) class object
+print(gila_time_hms) #Double checking that it worked and they don't all say "N/A now"
+data_gila$time_hms <- gila_time_hms # Brings the hms object back into the dataframe as a new column named "time_hms"
+
+datatrim_gila <- select(data_gila, c(site_id, tran_id, col_point, date, elev, avg_wind_spd, air_temp, rel_hum, gr_temp, rock_ind, abs_shr_dens, time_hms, det_strict, det_type_strict))
+#Split between the sites
+data_calico <- datatrim_gila %>% filter(site_id=="Calico Basin")
+data_vof <- datatrim_gila %>% filter(site_id=="Valley of Fire")
+
+#Graph the variables against each other
+ggpairs(data_calico, columns = 5:11, cardinality_threshold = 15) + theme_bw()
+
+#binomial model
+model_calico <- glm(det_strict ~ elev + avg_wind_spd + air_temp + rel_hum + gr_temp + rock_ind + abs_shr_dens, data=data_calico, family=binomial(link="logit"))
+
+#compare in anova for all coefficients
+anova(model_calico)
+
+#added variable plots to see if any predictor fits when accounting for the others
+olsrr::ols_plot_added_variable(model_calico)
+
+#Using VIF to check collinearity
+performance::check_collinearity(model_calico)
+
+#check model
+x <- predict(model_calico)
+y <- resid(model_calico)
+binnedplot(x, y)
+
+#dredging!
+options(na.action = "na.fail") # otherwise blows up with NA values
+dredge_calico <- dredge(model_calico)
+subset(dredge_calico, delta <5)
+subset(dredge_calico, delta <2)
+
+#variable weights
+sw(dredge_calico)
+
+#model summary
+summary(model.avg(dredge_calico, subset = delta < 2))
+
+#modeling coefficients averaged across all models
+
+
+c2 <- ggplot(data_calico, aes(rock_ind, det_strict)) + 
+  geom_point() +
+  geom_smooth(method="glm", method.args=list(family="binomial"(link="logit")))
+
+c3 <- ggplot(data_calico, aes((rock_ind)^2, det_strict)) + 
+  geom_point() +
+  geom_smooth(method="glm", method.args=list(family="binomial"(link="logit")))
+
+
+
+w3 <- ggplot(data_washburn, aes(aspect, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w4 <- ggplot(data_washburn, aes(cover, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w5 <- ggplot(data_washburn, aes(pH, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+c2
+c3
+(w1 + w2 +w3) / (w4 + w5) #patchwork notation for figure alignment
+
+
+
+
+c? <- ggplot(data_calico, aes((rock_ind)^2, det_strict)) + 
+  geom_point() +
+  geom_smooth(method="glm", method.args=list(family="binomial"(link="logit")))
