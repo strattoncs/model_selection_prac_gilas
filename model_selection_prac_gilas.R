@@ -53,6 +53,8 @@ olsrr::ols_plot_added_variable(model_calico)
 #Using VIF to check collinearity
 performance::check_collinearity(model_calico)
 
+performance::check_model(model_calico)
+
 #check model
 x <- predict(model_calico)
 y <- resid(model_calico)

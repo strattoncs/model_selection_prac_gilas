@@ -64,13 +64,31 @@ data_gila <- data_gila %>% mutate(avg_shr_dist = (shr_nw + shr_ne + shr_se + shr
 #density of the shrubs in "shrubs/m^2"
 data_gila <- data_gila %>% mutate(abs_shr_dens = (1/((avg_shr_dist/100))^2))
 
+#vapor pressure
+#create the saturation VPD function
+sat_vp_kPa <- function(Tc) 0.6108 * exp((17.27 * Tc) / (Tc + 237.3))
+
+# calculate VPD at each col_point
+data_gila <- data_gila %>%
+  mutate(
+    rh_input = rel_hum,                                 # rename RH column 
+    rh_frac = case_when(                                # Normalize RH to a fraction
+      is.na(rh_input) ~ NA_real_,
+      rh_input > 1  ~ pmin(pmax(rh_input / 100, 0), 1), # clamping values to 0/1 for outliers
+      TRUE ~ pmin(pmax(rh_input,0), 1)),
+    es_kPa  = sat_vp_kPa(air_temp),                     # saturation vapor pressure at the measured air temperature
+    vpd_kPa = pmax(es_kPa * (1 - rh_frac), 0))          # vapor pressure deficit at each row: VPD = es * (1 − RH)
+                                                        # pmax prevents negative values from rounding/measurement noise
+
+data_gila <- data_gila %>% mutate(prey_pres = (pp_mam + pp_rep + pp_gbird))
+
 # making time graphable
 data_gila$time <- paste0(data_gila$time, ":00") #adds 'seconds' to the data to put it in "%H:%M:%S" format
 gila_time_posix <- strptime(data_gila$time, format = "%H:%M:%S") #Makes the "time" column character data a "POSIXlt" object
 gila_time_hms <- as_hms(gila_time_posix) #Makes the Posix object an hms (hours, minutes, seconds) class object
 data_gila$time_hms <- gila_time_hms # Brings the hms object back into the dataframe as a new column named "time_hms"
 
-datatrim_gila <- dplyr::select(data_gila, c(site_id, tran_id, col_point, date, elev, avg_wind_spd, air_temp, rel_hum, gr_temp, rock_ind, abs_shr_dens, time_hms, det_strict, det_type_strict))
+datatrim_gila <- dplyr::select(data_gila, c(site_id, tran_id, col_point, date, elev, avg_wind_spd, air_temp, act_vap_pres, gr_temp, rock_ind, abs_shr_dens, time_hms, det_strict, det_type_strict))
 #Split between the sites
 data_calico <- datatrim_gila %>% filter(site_id=="Calico Basin")
 data_vof <- datatrim_gila %>% filter(site_id=="Valley of Fire")
